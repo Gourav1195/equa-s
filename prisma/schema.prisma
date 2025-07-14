@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id              String            @id @default(uuid())
+  name            String
+  email           String?
+  logoUrl         String?
+  plan            Plan              @default(Free)
+  users           User[]
+  createdAt       DateTime          @default(now())
+  Group           Group[]
+  FinanceRecord   FinanceRecord[]
+  SalaryStructure SalaryStructure[]
+  FeeStructure    FeeStructure[]
+  Member          Member[]
+}
+
+enum Plan {
+  Free
+  Premium
+}
+
+model UserFavGroup {
+  id      String @id @default(uuid())
+  userId  String
+  groupId String
+  user    User   @relation(fields: [userId], references: [id])
+  group   Group  @relation(fields: [groupId], references: [id])
+
+  addedAt DateTime @default(now())
+
+  @@unique([userId, groupId]) // prevent duplicate favs
+}
+
+model User {
+  id        String         @id @default(uuid())
+  memberId  String?        @unique
+  member    Member?        @relation(fields: [memberId], references: [id])
+  role      Role
+  isActive  Boolean        @default(true)
+  tenantId  String
+  groupId   String?
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  group     Group?         @relation(fields: [groupId], references: [id])
+  favGroup  UserFavGroup[]
+  createdAt DateTime       @default(now())
+  lastLogin DateTime       @default(now())
+}
+
+enum Role {
+  Admin
+  Moderator
+  Editor
+  Viewer
+  Finance
+}
+
+model Attendance {
+  id        String             @id @default(uuid())
+  groupId   String
+  group     Group              @relation(fields: [groupId], references: [id])
+  date      DateTime
+  records   AttendanceRecord[]
+  tenantId  String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  Member    Member?            @relation(fields: [memberId], references: [id])
+  memberId  String?
+
+  @@unique([groupId, date], name: "groupId_date")
+}
+
+model AttendanceRecord {
+  id           String     @id @default(uuid())
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id])
+  memberId     String
+  member       Member     @relation(fields: [memberId], references: [id])
+  present      Boolean
+}
+
+enum AssignmentMode {
+  Group
+  Member
+}
+
+enum GroupType {
+  FEE
+  SALARY
+  BOTH
+}
+
+model Group {
+  id       String  @id @default(uuid())
+  name     String
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id])
+  criteria String?
+
+  members    Member[]
+  User       User[]
+  Attendance Attendance[]
+
+  //assigned by group or member
+  feeMode    AssignmentMode @default(Group)
+  salaryMode AssignmentMode @default(Group)
+
+  type GroupType @default(FEE)
+
+  groupSalary      Float             @default(0.0)
+  groupFee         Float             @default(0.0)
+  favs             UserFavGroup[]
+  feeStructures    FeeStructure[]
+  salaryStructures SalaryStructure[]
+}
+
+enum GenderType {
+  Male
+  Female
+  Others
+}
+
+model Member {
+  id          String      @id @default(uuid())
+  memberNo    Int?
+  balance     Float?
+  name        String
+  username    String?     @unique
+  password    String?
+  email       String?     @unique
+  phoneNo     String?
+  gender      GenderType?
+  photoUrl    String?
+  special     String?
+  criteriaVal Boolean?
+  hobbies     String[]
+  exitDate    DateTime? // ← use this instead of deletedAt if you want to track session logic
+  isActive    Boolean     @default(true)
+  groupId     String?
+  user        User?
+  group       Group?      @relation(fields: [groupId], references: [id])
+
+  joiningDate      DateTime           @default(dbgenerated("date_trunc('year', now()) + interval '3 months'"))
+  tenantId         String
+  tenant           Tenant             @relation(fields: [tenantId], references: [id])
+  attendance       Attendance[]
+  AttendanceRecord AttendanceRecord[]
+  customFee        Float              @default(0.0)
+  customSalary     Float              @default(0.0)
+  feeStructures    FeeStructure[]
+  salaryStructures SalaryStructure[]
+  FinanceRecord    FinanceRecord[]
+}
+
+enum FinanceType {
+  FEE
+  SALARY
+}
+
+model FinanceRecord {
+  id             String      @id @default(uuid())
+  tenantId       String
+  memberId       String
+  structureId    String
+  structureType  FinanceType
+  amountExpected Float
+  amountPaid     Float
+  month          Int? // 0–11, optional
+  year           Int?
+  dueDate        DateTime?
+  paidDate       DateTime?
+  note           String?
+  createdAt      DateTime    @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model SalaryStructure {
+  id     String @id @default(uuid())
+  name   String
+  amount Float
+  arrear Float  @default(0.0)
+  ytd    Float  @default(0.0)
+
+  groupId   String?
+  group     Group?   @relation(fields: [groupId], references: [id])
+  memberId  String?
+  member    Member?  @relation(fields: [memberId], references: [id])
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FeeStructure {
+  id     String @id @default(uuid())
+  name   String
+  amount Float
+  arrear Float  @default(0.0)
+  ytd    Float  @default(0.0)
+
+  groupId   String?
+  group     Group?   @relation(fields: [groupId], references: [id])
+  memberId  String?
+  member    Member?  @relation(fields: [memberId], references: [id])
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
